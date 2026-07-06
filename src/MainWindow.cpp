@@ -2,3 +2,12 @@
 // 主窗口类实现文件。
 // 负责创建和布局界面，响应按钮点击事件，显示图片、人脸框、识别结果和识别日志。
 // MainWindow 只负责界面流程，不直接实现复杂的人脸检测或数据库逻辑。
+
+#include "MainWindow.h"
+
+MainWindow::MainWindow(QWidget *parent)
+    : QMainWindow(parent)
+{
+    setWindowTitle("Face Recognition System");
+    resize(1000, 700);
+}
