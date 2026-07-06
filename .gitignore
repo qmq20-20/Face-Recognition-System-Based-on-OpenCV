@@ -1,0 +1,42 @@
+# Build output
+build/
+build-*/
+cmake-build-*/
+out/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Compiled files
+*.exe
+*.dll
+*.o
+*.obj
+*.a
+*.lib
+
+# Qt local files
+*.user
+*.pro.user
+*.qmake.stash
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# VSCode local settings
+.vscode/
+
+# Runtime / test data
+*.log
+*.db
+logs/
+captures/
+
+# System files
+.DS_Store
+Thumbs.db
+desktop.ini
