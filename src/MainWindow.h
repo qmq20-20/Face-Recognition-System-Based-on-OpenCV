@@ -13,11 +13,14 @@
 #include "RecognitionService.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
+#include <opencv2/videoio.hpp>
 
 class QLabel;
 class QPushButton;
 class QTableWidget;
 class QTextEdit;
+class QTimer;
+class QCloseEvent;
 
 class MainWindow : public QMainWindow
 {
@@ -26,6 +29,9 @@ class MainWindow : public QMainWindow
 public:
     explicit MainWindow(QWidget *parent = nullptr);
 
+protected:
+    void closeEvent(QCloseEvent *event) override;
+
 private slots:
     void onImportImageClicked();
     void onRegisterPersonClicked();
@@ -33,6 +39,8 @@ private slots:
     void onClearClicked();
     void onStartCameraClicked();
     void onStopCameraClicked();
+    // 定时读取摄像头画面并进行实时识别。
+    void processCameraFrame();
 
 private:
     void setupUi();
@@ -82,6 +90,15 @@ private:
         const cv::Mat &mat,
         const std::vector<cv::Rect> &faces,
         const QList<RecognitionResult> &results);
+
+    // 摄像头定时器，每隔一小段时间读取一帧画面。
+    QTimer *cameraTimer;
+
+    // OpenCV 摄像头对象。
+    cv::VideoCapture camera;
+
+    // 摄像头帧计数，用于控制日志写入频率。
+    int cameraFrameCount;
 
 private:
     QLabel *imageLabel;

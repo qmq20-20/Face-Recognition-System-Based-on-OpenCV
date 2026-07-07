@@ -20,11 +20,14 @@
 #include <QCoreApplication>
 #include <QPainter>
 #include <QPen>
-
+#include <QCloseEvent>
+#include <QTimer>
 #include <vector>
 
 MainWindow::MainWindow(QWidget *parent)
-    : QMainWindow(parent)
+    : QMainWindow(parent),
+      cameraTimer(nullptr),
+      cameraFrameCount(0)
 {
     setupUi();
 }
@@ -54,6 +57,8 @@ void MainWindow::setupUi()
     clearButton = new QPushButton("清空", this);
     startCameraButton = new QPushButton("开始摄像头", this);
     stopCameraButton = new QPushButton("停止摄像头", this);
+
+    stopCameraButton->setEnabled(false);
 
     QVBoxLayout *buttonLayout = new QVBoxLayout;
     buttonLayout->addWidget(importImageButton);
@@ -105,6 +110,12 @@ void MainWindow::setupUi()
             this, &MainWindow::onStartCameraClicked);
     connect(stopCameraButton, &QPushButton::clicked,
             this, &MainWindow::onStopCameraClicked);
+
+    cameraTimer = new QTimer(this);
+    cameraTimer->setInterval(30);
+
+    connect(cameraTimer, &QTimer::timeout,
+            this, &MainWindow::processCameraFrame);
 
     QString modelPath = QCoreApplication::applicationDirPath() + "/resources/haarcascade_frontalface_default.xml";
 
@@ -158,14 +169,21 @@ void MainWindow::refreshLogView()
 
     logTextEdit->clear();
 
+    if (logs.isEmpty())
+    {
+        logTextEdit->setPlaceholderText("暂无识别日志");
+        return;
+    }
+
     for (const RecognitionLog &log : logs)
     {
-        logTextEdit->append(
-            QString("%1 | %2 | 相似度：%3 | %4")
-                .arg(log.recognizedAt)
-                .arg(log.personName)
-                .arg(log.similarity, 0, 'f', 2)
-                .arg(log.imagePath));
+        QString line = QString("[%1] %2 | 相似度：%3 | 来源：%4")
+                           .arg(log.recognizedAt)
+                           .arg(log.personName)
+                           .arg(log.similarity, 0, 'f', 2)
+                           .arg(log.imagePath);
+
+        logTextEdit->append(line);
     }
 }
 void MainWindow::displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces)
@@ -285,6 +303,11 @@ void MainWindow::displayImage(const cv::Mat &mat)
 
 void MainWindow::onImportImageClicked()
 {
+    if (camera.isOpened())
+    {
+        onStopCameraClicked();
+    }
+
     QString filePath = QFileDialog::getOpenFileName(
         this,
         "选择图片",
@@ -534,10 +557,126 @@ void MainWindow::onClearClicked()
 
 void MainWindow::onStartCameraClicked()
 {
-    QMessageBox::information(this, "提示", "摄像头功能将在 Step 11 实现。");
+    if (camera.isOpened())
+    {
+        QMessageBox::information(this, "提示", "摄像头已经在运行。");
+        return;
+    }
+
+    if (!camera.open(0))
+    {
+        QMessageBox::warning(this, "摄像头打开失败", "无法打开默认摄像头，请检查摄像头是否存在或被其他程序占用。");
+        return;
+    }
+
+    cameraFrameCount = 0;
+    currentImagePath = "camera";
+
+    startCameraButton->setEnabled(false);
+    stopCameraButton->setEnabled(true);
+
+    cameraTimer->start();
+
+    resultTextEdit->setText("摄像头已启动，正在实时检测。");
 }
 
 void MainWindow::onStopCameraClicked()
 {
-    QMessageBox::information(this, "提示", "摄像头停止功能将在 Step 11 实现。");
+    if (cameraTimer && cameraTimer->isActive())
+    {
+        cameraTimer->stop();
+    }
+
+    if (camera.isOpened())
+    {
+        camera.release();
+    }
+
+    startCameraButton->setEnabled(true);
+    stopCameraButton->setEnabled(false);
+
+    resultTextEdit->append("摄像头已停止。");
+}
+
+void MainWindow::processCameraFrame()
+{
+    if (!camera.isOpened())
+    {
+        return;
+    }
+
+    cv::Mat frame;
+    camera.read(frame);
+
+    if (frame.empty())
+    {
+        resultTextEdit->setText("摄像头画面读取失败。");
+        return;
+    }
+
+    currentImage = frame.clone();
+    currentFaces = faceDetector.detect(currentImage);
+
+    QList<Person> persons = repository.getAllPersons();
+    QList<FaceFeatureRecord> knownFeatures = repository.getAllFaceFeatures();
+
+    if (persons.isEmpty() || knownFeatures.isEmpty())
+    {
+        displayImageWithFaces(currentImage, currentFaces);
+
+        resultTextEdit->setText(
+            QString("摄像头实时检测中。\n检测到 %1 张人脸。\n请先注册人员后再进行身份识别。")
+                .arg(currentFaces.size()));
+
+        return;
+    }
+
+    QList<RecognitionResult> results;
+    QString resultText;
+
+    resultText += QString("摄像头实时识别中。\n检测到 %1 张人脸。\n\n")
+                      .arg(currentFaces.size());
+
+    ++cameraFrameCount;
+    bool shouldWriteLog = (cameraFrameCount % 30 == 0);
+
+    for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
+    {
+        cv::Mat faceImage = cropFace(currentImage, currentFaces[i]);
+        std::vector<float> feature = featureExtractor.extract(faceImage);
+
+        RecognitionResult result = recognitionService.recognize(
+            feature,
+            persons,
+            knownFeatures);
+
+        results.append(result);
+
+        resultText += QString("人脸 %1：%2，相似度：%3\n")
+                          .arg(i + 1)
+                          .arg(result.personName)
+                          .arg(result.similarity, 0, 'f', 2);
+
+        if (shouldWriteLog)
+        {
+            repository.addRecognitionLog(
+                result.personName,
+                result.similarity,
+                "camera");
+        }
+    }
+
+    displayImageWithRecognitionResults(currentImage, currentFaces, results);
+    resultTextEdit->setText(resultText);
+
+    if (shouldWriteLog)
+    {
+        refreshLogView();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    onStopCameraClicked();
+    QMainWindow::closeEvent(event);
 }
