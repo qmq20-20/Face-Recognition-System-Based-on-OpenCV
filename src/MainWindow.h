@@ -10,6 +10,7 @@
 #include "FaceDetector.h"
 #include "FeatureExtractor.h"
 #include "FaceRepository.h"
+#include "RecognitionService.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
 
@@ -72,6 +73,15 @@ private:
 
     // 刷新界面中的识别日志。
     void refreshLogView();
+
+    // 识别服务，负责相似度计算和身份判断。
+    RecognitionService recognitionService;
+
+    // 在图片上绘制人脸框和识别结果。
+    void displayImageWithRecognitionResults(
+        const cv::Mat &mat,
+        const std::vector<cv::Rect> &faces,
+        const QList<RecognitionResult> &results);
 
 private:
     QLabel *imageLabel;

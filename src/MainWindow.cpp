@@ -409,7 +409,51 @@ void MainWindow::onRegisterPersonClicked()
 
     QMessageBox::information(this, "注册成功", "人员注册成功。");
 }
+void MainWindow::displayImageWithRecognitionResults(
+    const cv::Mat &mat,
+    const std::vector<cv::Rect> &faces,
+    const QList<RecognitionResult> &results)
+{
+    QImage image = matToQImage(mat);
 
+    if (image.isNull())
+    {
+        imageLabel->setText("图片显示失败");
+        return;
+    }
+
+    QPainter painter(&image);
+    painter.setPen(QPen(Qt::red, 3));
+
+    for (int i = 0; i < static_cast<int>(faces.size()); ++i)
+    {
+        const cv::Rect &face = faces[i];
+
+        painter.drawRect(face.x, face.y, face.width, face.height);
+
+        QString label = "Face";
+
+        if (i < results.size())
+        {
+            const RecognitionResult &result = results[i];
+
+            label = QString("%1 %2")
+                        .arg(result.personName)
+                        .arg(result.similarity, 0, 'f', 2);
+        }
+
+        int textY = face.y > 10 ? face.y - 5 : face.y + 20;
+        painter.drawText(face.x, textY, label);
+    }
+
+    painter.end();
+
+    imageLabel->setPixmap(
+        QPixmap::fromImage(image).scaled(
+            imageLabel->size(),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation));
+}
 void MainWindow::onRecognizeClicked()
 {
     if (currentImage.empty())
@@ -424,30 +468,56 @@ void MainWindow::onRecognizeClicked()
         return;
     }
 
+    QList<Person> persons = repository.getAllPersons();
+    QList<FaceFeatureRecord> knownFeatures = repository.getAllFaceFeatures();
+
+    if (persons.isEmpty() || knownFeatures.isEmpty())
+    {
+        QMessageBox::warning(this, "提示", "请先注册至少一名人员。");
+        return;
+    }
+
     currentFaces = faceDetector.detect(currentImage);
-    displayImageWithFaces(currentImage, currentFaces);
 
     if (currentFaces.empty())
     {
+        displayImage(currentImage);
         resultTextEdit->setText("未检测到人脸。");
         return;
     }
 
+    QList<RecognitionResult> results;
     QString resultText;
+
     resultText += QString("检测到 %1 张人脸。\n").arg(currentFaces.size());
-    resultText += QString("每张人脸的特征长度：%1\n\n").arg(featureExtractor.featureLength());
+    resultText += QString("识别阈值：%1\n\n").arg(recognitionService.threshold(), 0, 'f', 2);
 
     for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
     {
         cv::Mat faceImage = cropFace(currentImage, currentFaces[i]);
         std::vector<float> feature = featureExtractor.extract(faceImage);
 
-        resultText += QString("人脸 %1：特征向量长度 = %2\n")
+        RecognitionResult result = recognitionService.recognize(
+            feature,
+            persons,
+            knownFeatures);
+
+        results.append(result);
+
+        resultText += QString("人脸 %1：%2，相似度：%3\n")
                           .arg(i + 1)
-                          .arg(feature.size());
+                          .arg(result.personName)
+                          .arg(result.similarity, 0, 'f', 2);
+
+        repository.addRecognitionLog(
+            result.personName,
+            result.similarity,
+            currentImagePath);
     }
 
+    displayImageWithRecognitionResults(currentImage, currentFaces, results);
     resultTextEdit->setText(resultText);
+    refreshLogView();
 }
 
 void MainWindow::onClearClicked()
