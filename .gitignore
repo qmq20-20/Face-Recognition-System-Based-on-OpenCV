@@ -40,3 +40,6 @@ captures/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Local AI/agent workspace
+.agents/

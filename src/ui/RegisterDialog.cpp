@@ -1,4 +1,4 @@
-#include "RegisterDialog.h"
+#include "ui/RegisterDialog.h"
 
 #include <QDialogButtonBox>
 #include <QFileDialog>

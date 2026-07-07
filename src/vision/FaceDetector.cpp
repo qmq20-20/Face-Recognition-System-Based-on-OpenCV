@@ -1,4 +1,4 @@
-#include "FaceDetector.h"
+#include "vision/FaceDetector.h"
 
 #include <QFileInfo>
 #include <opencv2/imgproc.hpp>

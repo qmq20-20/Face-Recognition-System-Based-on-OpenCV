@@ -5,7 +5,7 @@
 // 人脸识别业务逻辑声明文件。
 // 负责比较待识别人脸特征和数据库中的已知特征，返回最相似人员或“陌生人”。
 
-#include "FaceRepository.h"
+#include "storage/FaceRepository.h"
 
 #include <QString>
 

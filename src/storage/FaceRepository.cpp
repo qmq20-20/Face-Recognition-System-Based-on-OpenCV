@@ -1,4 +1,4 @@
-#include "FaceRepository.h"
+#include "storage/FaceRepository.h"
 
 #include <QDateTime>
 #include <QDir>

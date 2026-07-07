@@ -7,10 +7,10 @@
 
 #include <QMainWindow>
 #include <QString>
-#include "FaceDetector.h"
-#include "FeatureExtractor.h"
-#include "FaceRepository.h"
-#include "RecognitionService.h"
+#include "service/RecognitionService.h"
+#include "storage/FaceRepository.h"
+#include "vision/FaceDetector.h"
+#include "vision/FeatureExtractor.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
@@ -45,13 +45,6 @@ private slots:
 private:
     void setupUi();
 
-    // 从文件路径读取图片。
-    // 使用 Qt 先读取文件字节，再交给 OpenCV 解码，可以更好兼容中文路径。
-    cv::Mat readImageFromFile(const QString &filePath);
-
-    // 把 OpenCV 的 cv::Mat 转换成 Qt 的 QImage，供 QLabel 显示。
-    QImage matToQImage(const cv::Mat &mat);
-
     // 将图片按比例缩放后显示到 imageLabel。
     void displayImage(const cv::Mat &mat);
 
@@ -66,9 +59,6 @@ private:
 
     // 人脸特征提取器，负责把人脸图像转换成固定长度向量。
     FeatureExtractor featureExtractor;
-
-    // 从当前图片中裁剪指定人脸区域。
-    cv::Mat cropFace(const cv::Mat &image, const cv::Rect &faceRect);
 
     // 数据库访问对象，负责保存和读取人员、特征、日志。
     FaceRepository repository;

@@ -1,7 +1,9 @@
-#include "MainWindow.h"
-#include "RegisterDialog.h"
-#include <QByteArray>
-#include <QFile>
+#include "ui/MainWindow.h"
+
+#include "config/AppConfig.h"
+#include "ui/RegisterDialog.h"
+#include "utils/ImageUtils.h"
+
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
@@ -14,10 +16,8 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
-#include <QCoreApplication>
 #include <QDir>
 #include <QTableWidgetItem>
-#include <QCoreApplication>
 #include <QPainter>
 #include <QPen>
 #include <QCloseEvent>
@@ -26,6 +26,7 @@
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
+      recognitionService(AppConfig::defaultSimilarityThreshold()),
       cameraTimer(nullptr),
       cameraFrameCount(0)
 {
@@ -112,12 +113,12 @@ void MainWindow::setupUi()
             this, &MainWindow::onStopCameraClicked);
 
     cameraTimer = new QTimer(this);
-    cameraTimer->setInterval(30);
+    cameraTimer->setInterval(AppConfig::cameraFrameIntervalMs());
 
     connect(cameraTimer, &QTimer::timeout,
             this, &MainWindow::processCameraFrame);
 
-    QString modelPath = QCoreApplication::applicationDirPath() + "/resources/haarcascade_frontalface_default.xml";
+    QString modelPath = AppConfig::faceCascadeModelPath();
 
     if (!faceDetector.loadModel(modelPath))
     {
@@ -127,10 +128,10 @@ void MainWindow::setupUi()
 }
 void MainWindow::initializeDatabase()
 {
-    QString dataDir = QCoreApplication::applicationDirPath() + "/data";
+    QString dataDir = AppConfig::dataDirectory();
     QDir().mkpath(dataDir);
 
-    QString databasePath = dataDir + "/face_recognition.db";
+    QString databasePath = AppConfig::databasePath();
 
     if (!repository.open(databasePath))
     {
@@ -188,7 +189,7 @@ void MainWindow::refreshLogView()
 }
 void MainWindow::displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces)
 {
-    QImage image = matToQImage(mat);
+    QImage image = ImageUtils::matToQImage(mat);
 
     if (image.isNull())
     {
@@ -213,79 +214,10 @@ void MainWindow::displayImageWithFaces(const cv::Mat &mat, const std::vector<cv:
             Qt::KeepAspectRatio,
             Qt::SmoothTransformation));
 }
-cv::Mat MainWindow::readImageFromFile(const QString &filePath)
-{
-    QFile file(filePath);
-
-    if (!file.open(QIODevice::ReadOnly))
-    {
-        return cv::Mat();
-    }
-
-    QByteArray imageData = file.readAll();
-
-    std::vector<uchar> buffer(
-        reinterpret_cast<const uchar *>(imageData.constData()),
-        reinterpret_cast<const uchar *>(imageData.constData()) + imageData.size());
-
-    return cv::imdecode(buffer, cv::IMREAD_COLOR);
-}
-cv::Mat MainWindow::cropFace(const cv::Mat &image, const cv::Rect &faceRect)
-{
-    if (image.empty())
-    {
-        return cv::Mat();
-    }
-
-    // 防止人脸框超出图片边界。
-    cv::Rect imageRect(0, 0, image.cols, image.rows);
-    cv::Rect safeRect = faceRect & imageRect;
-
-    if (safeRect.width <= 0 || safeRect.height <= 0)
-    {
-        return cv::Mat();
-    }
-
-    return image(safeRect).clone();
-}
-QImage MainWindow::matToQImage(const cv::Mat &mat)
-{
-    if (mat.empty())
-    {
-        return QImage();
-    }
-
-    cv::Mat rgbImage;
-
-    if (mat.channels() == 3)
-    {
-        cv::cvtColor(mat, rgbImage, cv::COLOR_BGR2RGB);
-        return QImage(
-                   rgbImage.data,
-                   rgbImage.cols,
-                   rgbImage.rows,
-                   static_cast<int>(rgbImage.step),
-                   QImage::Format_RGB888)
-            .copy();
-    }
-
-    if (mat.channels() == 1)
-    {
-        return QImage(
-                   mat.data,
-                   mat.cols,
-                   mat.rows,
-                   static_cast<int>(mat.step),
-                   QImage::Format_Grayscale8)
-            .copy();
-    }
-
-    return QImage();
-}
 
 void MainWindow::displayImage(const cv::Mat &mat)
 {
-    QImage image = matToQImage(mat);
+    QImage image = ImageUtils::matToQImage(mat);
 
     if (image.isNull())
     {
@@ -319,7 +251,7 @@ void MainWindow::onImportImageClicked()
         return;
     }
 
-    cv::Mat image = readImageFromFile(filePath);
+    cv::Mat image = ImageUtils::readImageFromFile(filePath);
 
     if (image.empty())
     {
@@ -361,7 +293,7 @@ void MainWindow::onRegisterPersonClicked()
         return;
     }
 
-    cv::Mat image = readImageFromFile(imagePath);
+    cv::Mat image = ImageUtils::readImageFromFile(imagePath);
 
     if (image.empty())
     {
@@ -394,7 +326,7 @@ void MainWindow::onRegisterPersonClicked()
         }
     }
 
-    cv::Mat faceImage = cropFace(image, largestFace);
+    cv::Mat faceImage = ImageUtils::cropFace(image, largestFace);
     std::vector<float> feature = featureExtractor.extract(faceImage);
 
     if (feature.empty())
@@ -437,7 +369,7 @@ void MainWindow::displayImageWithRecognitionResults(
     const std::vector<cv::Rect> &faces,
     const QList<RecognitionResult> &results)
 {
-    QImage image = matToQImage(mat);
+    QImage image = ImageUtils::matToQImage(mat);
 
     if (image.isNull())
     {
@@ -517,7 +449,7 @@ void MainWindow::onRecognizeClicked()
 
     for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
     {
-        cv::Mat faceImage = cropFace(currentImage, currentFaces[i]);
+        cv::Mat faceImage = ImageUtils::cropFace(currentImage, currentFaces[i]);
         std::vector<float> feature = featureExtractor.extract(faceImage);
 
         RecognitionResult result = recognitionService.recognize(
@@ -638,11 +570,11 @@ void MainWindow::processCameraFrame()
                       .arg(currentFaces.size());
 
     ++cameraFrameCount;
-    bool shouldWriteLog = (cameraFrameCount % 30 == 0);
+    bool shouldWriteLog = (cameraFrameCount % AppConfig::cameraLogFrameInterval() == 0);
 
     for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
     {
-        cv::Mat faceImage = cropFace(currentImage, currentFaces[i]);
+        cv::Mat faceImage = ImageUtils::cropFace(currentImage, currentFaces[i]);
         std::vector<float> feature = featureExtractor.extract(faceImage);
 
         RecognitionResult result = recognitionService.recognize(

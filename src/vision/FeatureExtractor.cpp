@@ -1,4 +1,4 @@
-#include "FeatureExtractor.h"
+#include "vision/FeatureExtractor.h"
 
 #include <opencv2/imgproc.hpp>
 
