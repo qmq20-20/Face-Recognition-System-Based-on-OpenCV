@@ -7,9 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_AUTOMOC ON)
 
+# Qt path
 set(CMAKE_PREFIX_PATH "D:/QT/5.14.2/mingw73_64")
 
+# OpenCV path
+set(OpenCV_DIR "D:/opencv-mingw/x64/mingw/lib")
+
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
+find_package(OpenCV REQUIRED)
 
 add_executable(FaceRecognitionSystem
     src/main.cpp
@@ -17,4 +22,8 @@ add_executable(FaceRecognitionSystem
     src/MainWindow.cpp
 )
 
-target_link_libraries(FaceRecognitionSystem PRIVATE Qt5::Widgets)
+target_link_libraries(FaceRecognitionSystem
+    PRIVATE
+    Qt5::Widgets
+    ${OpenCV_LIBS}
+)
