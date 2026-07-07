@@ -8,6 +8,7 @@
 #include <QMainWindow>
 #include <QString>
 #include "FaceDetector.h"
+#include "FeatureExtractor.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
 
@@ -52,6 +53,12 @@ private:
 
     // 在图片上绘制人脸框并显示。
     void displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces);
+
+    // 人脸特征提取器，负责把人脸图像转换成固定长度向量。
+    FeatureExtractor featureExtractor;
+
+    // 从当前图片中裁剪指定人脸区域。
+    cv::Mat cropFace(const cv::Mat &image, const cv::Rect &faceRect);
 
 private:
     QLabel *imageLabel;

@@ -22,6 +22,8 @@ add_executable(FaceRecognitionSystem
     src/MainWindow.cpp
     src/FaceDetector.h
     src/FaceDetector.cpp
+    src/FeatureExtractor.h
+    src/FeatureExtractor.cpp
 )
 add_custom_command(TARGET FaceRecognitionSystem POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

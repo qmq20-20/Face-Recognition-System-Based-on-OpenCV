@@ -155,7 +155,24 @@ cv::Mat MainWindow::readImageFromFile(const QString &filePath)
 
     return cv::imdecode(buffer, cv::IMREAD_COLOR);
 }
+cv::Mat MainWindow::cropFace(const cv::Mat &image, const cv::Rect &faceRect)
+{
+    if (image.empty())
+    {
+        return cv::Mat();
+    }
 
+    // 防止人脸框超出图片边界。
+    cv::Rect imageRect(0, 0, image.cols, image.rows);
+    cv::Rect safeRect = faceRect & imageRect;
+
+    if (safeRect.width <= 0 || safeRect.height <= 0)
+    {
+        return cv::Mat();
+    }
+
+    return image(safeRect).clone();
+}
 QImage MainWindow::matToQImage(const cv::Mat &mat)
 {
     if (mat.empty())
@@ -263,12 +280,24 @@ void MainWindow::onRecognizeClicked()
     if (currentFaces.empty())
     {
         resultTextEdit->setText("未检测到人脸。");
+        return;
     }
-    else
+
+    QString resultText;
+    resultText += QString("检测到 %1 张人脸。\n").arg(currentFaces.size());
+    resultText += QString("每张人脸的特征长度：%1\n\n").arg(featureExtractor.featureLength());
+
+    for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
     {
-        resultTextEdit->setText(
-            QString("检测到 %1 张人脸。").arg(currentFaces.size()));
+        cv::Mat faceImage = cropFace(currentImage, currentFaces[i]);
+        std::vector<float> feature = featureExtractor.extract(faceImage);
+
+        resultText += QString("人脸 %1：特征向量长度 = %2\n")
+                          .arg(i + 1)
+                          .arg(feature.size());
     }
+
+    resultTextEdit->setText(resultText);
 }
 
 void MainWindow::onClearClicked()
