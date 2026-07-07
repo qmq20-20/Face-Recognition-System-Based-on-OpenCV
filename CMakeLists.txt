@@ -13,6 +13,7 @@ set(CMAKE_PREFIX_PATH "D:/QT/5.14.2/mingw73_64")
 # OpenCV path
 set(OpenCV_DIR "D:/opencv-mingw/x64/mingw/lib")
 
+find_package(Qt5 REQUIRED COMPONENTS Widgets Sql)
 find_package(Qt5 REQUIRED COMPONENTS Widgets)
 find_package(OpenCV REQUIRED)
 
@@ -24,6 +25,8 @@ add_executable(FaceRecognitionSystem
     src/FaceDetector.cpp
     src/FeatureExtractor.h
     src/FeatureExtractor.cpp
+    src/FaceRepository.h
+    src/FaceRepository.cpp
 )
 add_custom_command(TARGET FaceRecognitionSystem POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -33,5 +36,6 @@ add_custom_command(TARGET FaceRecognitionSystem POST_BUILD
 target_link_libraries(FaceRecognitionSystem
     PRIVATE
     Qt5::Widgets
+    Qt5::Sql
     ${OpenCV_LIBS}
 )

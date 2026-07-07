@@ -9,6 +9,7 @@
 #include <QString>
 #include "FaceDetector.h"
 #include "FeatureExtractor.h"
+#include "FaceRepository.h"
 #include <vector>
 #include <opencv2/opencv.hpp>
 
@@ -59,6 +60,18 @@ private:
 
     // 从当前图片中裁剪指定人脸区域。
     cv::Mat cropFace(const cv::Mat &image, const cv::Rect &faceRect);
+
+    // 数据库访问对象，负责保存和读取人员、特征、日志。
+    FaceRepository repository;
+
+    // 初始化 SQLite 数据库。
+    void initializeDatabase();
+
+    // 刷新界面中的人员列表。
+    void refreshPersonTable();
+
+    // 刷新界面中的识别日志。
+    void refreshLogView();
 
 private:
     QLabel *imageLabel;

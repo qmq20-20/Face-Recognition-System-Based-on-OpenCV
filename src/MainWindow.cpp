@@ -14,7 +14,9 @@
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
-
+#include <QCoreApplication>
+#include <QDir>
+#include <QTableWidgetItem>
 #include <QCoreApplication>
 #include <QPainter>
 #include <QPen>
@@ -109,6 +111,61 @@ void MainWindow::setupUi()
     if (!faceDetector.loadModel(modelPath))
     {
         QMessageBox::warning(this, "模型加载失败", "无法加载人脸检测模型：\n" + modelPath);
+    }
+    initializeDatabase();
+}
+void MainWindow::initializeDatabase()
+{
+    QString dataDir = QCoreApplication::applicationDirPath() + "/data";
+    QDir().mkpath(dataDir);
+
+    QString databasePath = dataDir + "/face_recognition.db";
+
+    if (!repository.open(databasePath))
+    {
+        QMessageBox::critical(
+            this,
+            "数据库初始化失败",
+            "无法打开或创建数据库：\n" + databasePath + "\n\n错误信息：\n" + repository.lastError());
+        return;
+    }
+
+    refreshPersonTable();
+    refreshLogView();
+
+    resultTextEdit->setText("数据库初始化成功：\n" + databasePath);
+}
+
+void MainWindow::refreshPersonTable()
+{
+    QList<Person> persons = repository.getAllPersons();
+
+    personTable->setRowCount(persons.size());
+
+    for (int row = 0; row < persons.size(); ++row)
+    {
+        const Person &person = persons[row];
+
+        personTable->setItem(row, 0, new QTableWidgetItem(person.name));
+        personTable->setItem(row, 1, new QTableWidgetItem(person.studentId));
+        personTable->setItem(row, 2, new QTableWidgetItem(person.department));
+    }
+}
+
+void MainWindow::refreshLogView()
+{
+    QList<RecognitionLog> logs = repository.getRecentLogs(50);
+
+    logTextEdit->clear();
+
+    for (const RecognitionLog &log : logs)
+    {
+        logTextEdit->append(
+            QString("%1 | %2 | 相似度：%3 | %4")
+                .arg(log.recognizedAt)
+                .arg(log.personName)
+                .arg(log.similarity, 0, 'f', 2)
+                .arg(log.imagePath));
     }
 }
 void MainWindow::displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces)
