@@ -1,19 +1,21 @@
-// MainWindow.cpp
-// 主窗口类实现文件。
-// 负责创建和布局界面，响应按钮点击事件，显示图片、人脸框、识别结果和识别日志。
-// MainWindow 只负责界面流程，不直接实现复杂的人脸检测、特征提取或数据库逻辑。
-
 #include "MainWindow.h"
 
+#include <QByteArray>
+#include <QFile>
+#include <QFileDialog>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QImage>
 #include <QLabel>
 #include <QMessageBox>
+#include <QPixmap>
 #include <QPushButton>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <vector>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -99,9 +101,104 @@ void MainWindow::setupUi()
             this, &MainWindow::onStopCameraClicked);
 }
 
+cv::Mat MainWindow::readImageFromFile(const QString &filePath)
+{
+    QFile file(filePath);
+
+    if (!file.open(QIODevice::ReadOnly))
+    {
+        return cv::Mat();
+    }
+
+    QByteArray imageData = file.readAll();
+
+    std::vector<uchar> buffer(
+        reinterpret_cast<const uchar *>(imageData.constData()),
+        reinterpret_cast<const uchar *>(imageData.constData()) + imageData.size());
+
+    return cv::imdecode(buffer, cv::IMREAD_COLOR);
+}
+
+QImage MainWindow::matToQImage(const cv::Mat &mat)
+{
+    if (mat.empty())
+    {
+        return QImage();
+    }
+
+    cv::Mat rgbImage;
+
+    if (mat.channels() == 3)
+    {
+        cv::cvtColor(mat, rgbImage, cv::COLOR_BGR2RGB);
+        return QImage(
+                   rgbImage.data,
+                   rgbImage.cols,
+                   rgbImage.rows,
+                   static_cast<int>(rgbImage.step),
+                   QImage::Format_RGB888)
+            .copy();
+    }
+
+    if (mat.channels() == 1)
+    {
+        return QImage(
+                   mat.data,
+                   mat.cols,
+                   mat.rows,
+                   static_cast<int>(mat.step),
+                   QImage::Format_Grayscale8)
+            .copy();
+    }
+
+    return QImage();
+}
+
+void MainWindow::displayImage(const cv::Mat &mat)
+{
+    QImage image = matToQImage(mat);
+
+    if (image.isNull())
+    {
+        imageLabel->setText("图片显示失败");
+        return;
+    }
+
+    QPixmap pixmap = QPixmap::fromImage(image);
+    imageLabel->setPixmap(
+        pixmap.scaled(
+            imageLabel->size(),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation));
+}
+
 void MainWindow::onImportImageClicked()
 {
-    QMessageBox::information(this, "提示", "导入图片功能将在 Step 4 实现。");
+    QString filePath = QFileDialog::getOpenFileName(
+        this,
+        "选择图片",
+        QString(),
+        "Images (*.png *.jpg *.jpeg *.bmp)");
+
+    if (filePath.isEmpty())
+    {
+        return;
+    }
+
+    cv::Mat image = readImageFromFile(filePath);
+
+    if (image.empty())
+    {
+        QMessageBox::warning(this, "导入失败", "图片读取失败，请选择有效的图片文件。");
+        return;
+    }
+
+    currentImagePath = filePath;
+    currentImage = image;
+
+    displayImage(currentImage);
+
+    resultTextEdit->setText("图片导入成功：\n" + currentImagePath);
 }
 
 void MainWindow::onRegisterPersonClicked()
@@ -116,7 +213,12 @@ void MainWindow::onRecognizeClicked()
 
 void MainWindow::onClearClicked()
 {
+    currentImagePath.clear();
+    currentImage.release();
+
+    imageLabel->clear();
     imageLabel->setText("图片 / 摄像头画面显示区域");
+
     resultTextEdit->clear();
     logTextEdit->clear();
 }
