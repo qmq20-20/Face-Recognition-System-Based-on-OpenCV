@@ -20,8 +20,14 @@ add_executable(FaceRecognitionSystem
     src/main.cpp
     src/MainWindow.h
     src/MainWindow.cpp
+    src/FaceDetector.h
+    src/FaceDetector.cpp
 )
-
+add_custom_command(TARGET FaceRecognitionSystem POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_SOURCE_DIR}/resources
+    $<TARGET_FILE_DIR:FaceRecognitionSystem>/resources
+)
 target_link_libraries(FaceRecognitionSystem
     PRIVATE
     Qt5::Widgets

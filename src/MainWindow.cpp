@@ -15,6 +15,10 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <QCoreApplication>
+#include <QPainter>
+#include <QPen>
+
 #include <vector>
 
 MainWindow::MainWindow(QWidget *parent)
@@ -99,8 +103,41 @@ void MainWindow::setupUi()
             this, &MainWindow::onStartCameraClicked);
     connect(stopCameraButton, &QPushButton::clicked,
             this, &MainWindow::onStopCameraClicked);
-}
 
+    QString modelPath = QCoreApplication::applicationDirPath() + "/resources/haarcascade_frontalface_default.xml";
+
+    if (!faceDetector.loadModel(modelPath))
+    {
+        QMessageBox::warning(this, "模型加载失败", "无法加载人脸检测模型：\n" + modelPath);
+    }
+}
+void MainWindow::displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces)
+{
+    QImage image = matToQImage(mat);
+
+    if (image.isNull())
+    {
+        imageLabel->setText("图片显示失败");
+        return;
+    }
+
+    QPainter painter(&image);
+    painter.setPen(QPen(Qt::red, 3));
+
+    // 把 OpenCV 检测到的人脸框画到 Qt 图片上。
+    for (const cv::Rect &face : faces)
+    {
+        painter.drawRect(face.x, face.y, face.width, face.height);
+    }
+
+    painter.end();
+
+    imageLabel->setPixmap(
+        QPixmap::fromImage(image).scaled(
+            imageLabel->size(),
+            Qt::KeepAspectRatio,
+            Qt::SmoothTransformation));
+}
 cv::Mat MainWindow::readImageFromFile(const QString &filePath)
 {
     QFile file(filePath);
@@ -208,7 +245,30 @@ void MainWindow::onRegisterPersonClicked()
 
 void MainWindow::onRecognizeClicked()
 {
-    QMessageBox::information(this, "提示", "身份识别功能将在 Step 9 实现。");
+    if (currentImage.empty())
+    {
+        QMessageBox::warning(this, "提示", "请先导入一张图片。");
+        return;
+    }
+
+    if (!faceDetector.isLoaded())
+    {
+        QMessageBox::warning(this, "提示", "人脸检测模型尚未加载成功。");
+        return;
+    }
+
+    currentFaces = faceDetector.detect(currentImage);
+    displayImageWithFaces(currentImage, currentFaces);
+
+    if (currentFaces.empty())
+    {
+        resultTextEdit->setText("未检测到人脸。");
+    }
+    else
+    {
+        resultTextEdit->setText(
+            QString("检测到 %1 张人脸。").arg(currentFaces.size()));
+    }
 }
 
 void MainWindow::onClearClicked()

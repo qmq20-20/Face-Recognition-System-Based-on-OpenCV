@@ -7,7 +7,8 @@
 
 #include <QMainWindow>
 #include <QString>
-
+#include "FaceDetector.h"
+#include <vector>
 #include <opencv2/opencv.hpp>
 
 class QLabel;
@@ -42,6 +43,15 @@ private:
 
     // 将图片按比例缩放后显示到 imageLabel。
     void displayImage(const cv::Mat &mat);
+
+    // 人脸检测器，负责加载模型和检测人脸。
+    FaceDetector faceDetector;
+
+    // 当前图片中检测到的人脸框。
+    std::vector<cv::Rect> currentFaces;
+
+    // 在图片上绘制人脸框并显示。
+    void displayImageWithFaces(const cv::Mat &mat, const std::vector<cv::Rect> &faces);
 
 private:
     QLabel *imageLabel;
