@@ -34,7 +34,7 @@ protected:
 
 private slots:
     void onImportImageClicked();
-    void onRegisterPersonClicked();
+    void onManagePersonsClicked();
     void onRecognizeClicked();
     void onClearClicked();
     void onStartCameraClicked();
@@ -97,7 +97,7 @@ private:
     QTextEdit *logTextEdit;
 
     QPushButton *importImageButton;
-    QPushButton *registerPersonButton;
+    QPushButton *managePersonsButton;
     QPushButton *recognizeButton;
     QPushButton *clearButton;
     QPushButton *startCameraButton;

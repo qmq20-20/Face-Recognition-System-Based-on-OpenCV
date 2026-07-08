@@ -1,7 +1,7 @@
 #include "ui/MainWindow.h"
 
 #include "config/AppConfig.h"
-#include "ui/RegisterDialog.h"
+#include "ui/PersonManagementDialog.h"
 #include "utils/ImageUtils.h"
 
 #include <QFileDialog>
@@ -53,7 +53,7 @@ void MainWindow::setupUi()
         "}");
 
     importImageButton = new QPushButton("导入图片", this);
-    registerPersonButton = new QPushButton("注册人员", this);
+    managePersonsButton = new QPushButton("人员管理", this);
     recognizeButton = new QPushButton("开始识别", this);
     clearButton = new QPushButton("清空", this);
     startCameraButton = new QPushButton("开始摄像头", this);
@@ -63,7 +63,7 @@ void MainWindow::setupUi()
 
     QVBoxLayout *buttonLayout = new QVBoxLayout;
     buttonLayout->addWidget(importImageButton);
-    buttonLayout->addWidget(registerPersonButton);
+    buttonLayout->addWidget(managePersonsButton);
     buttonLayout->addWidget(recognizeButton);
     buttonLayout->addWidget(clearButton);
     buttonLayout->addWidget(startCameraButton);
@@ -101,8 +101,8 @@ void MainWindow::setupUi()
 
     connect(importImageButton, &QPushButton::clicked,
             this, &MainWindow::onImportImageClicked);
-    connect(registerPersonButton, &QPushButton::clicked,
-            this, &MainWindow::onRegisterPersonClicked);
+    connect(managePersonsButton, &QPushButton::clicked,
+            this, &MainWindow::onManagePersonsClicked);
     connect(recognizeButton, &QPushButton::clicked,
             this, &MainWindow::onRecognizeClicked);
     connect(clearButton, &QPushButton::clicked,
@@ -267,102 +267,11 @@ void MainWindow::onImportImageClicked()
     resultTextEdit->setText("图片导入成功：\n" + currentImagePath);
 }
 
-void MainWindow::onRegisterPersonClicked()
+void MainWindow::onManagePersonsClicked()
 {
-    RegisterDialog dialog(this);
-
-    if (dialog.exec() != QDialog::Accepted)
-    {
-        return;
-    }
-
-    QString name = dialog.name();
-    QString studentId = dialog.studentId();
-    QString department = dialog.department();
-    QString imagePath = dialog.imagePath();
-
-    if (name.isEmpty())
-    {
-        QMessageBox::warning(this, "注册失败", "姓名不能为空。");
-        return;
-    }
-
-    if (imagePath.isEmpty())
-    {
-        QMessageBox::warning(this, "注册失败", "请选择一张人脸图片。");
-        return;
-    }
-
-    cv::Mat image = ImageUtils::readImageFromFile(imagePath);
-
-    if (image.empty())
-    {
-        QMessageBox::warning(this, "注册失败", "注册图片读取失败。");
-        return;
-    }
-
-    if (!faceDetector.isLoaded())
-    {
-        QMessageBox::warning(this, "注册失败", "人脸检测模型尚未加载成功。");
-        return;
-    }
-
-    std::vector<cv::Rect> faces = faceDetector.detect(image);
-
-    if (faces.empty())
-    {
-        QMessageBox::warning(this, "注册失败", "注册图片中未检测到人脸。");
-        return;
-    }
-
-    // 如果一张图片中有多张脸，第一版默认选择面积最大的人脸。
-    cv::Rect largestFace = faces[0];
-
-    for (const cv::Rect &face : faces)
-    {
-        if (face.area() > largestFace.area())
-        {
-            largestFace = face;
-        }
-    }
-
-    cv::Mat faceImage = ImageUtils::cropFace(image, largestFace);
-    std::vector<float> feature = featureExtractor.extract(faceImage);
-
-    if (feature.empty())
-    {
-        QMessageBox::warning(this, "注册失败", "人脸特征提取失败。");
-        return;
-    }
-
-    int personId = repository.addPerson(name, studentId, department);
-
-    if (personId <= 0)
-    {
-        QMessageBox::warning(
-            this,
-            "注册失败",
-            "人员信息保存失败：\n" + repository.lastError());
-        return;
-    }
-
-    if (!repository.addFaceFeature(personId, feature))
-    {
-        QMessageBox::warning(
-            this,
-            "注册失败",
-            "人脸特征保存失败：\n" + repository.lastError());
-        return;
-    }
-
+    PersonManagementDialog dialog(&repository, &faceDetector, &featureExtractor, this);
+    dialog.exec();
     refreshPersonTable();
-
-    resultTextEdit->setText(
-        QString("注册成功：%1\n特征长度：%2")
-            .arg(name)
-            .arg(feature.size()));
-
-    QMessageBox::information(this, "注册成功", "人员注册成功。");
 }
 void MainWindow::displayImageWithRecognitionResults(
     const cv::Mat &mat,
@@ -428,7 +337,7 @@ void MainWindow::onRecognizeClicked()
 
     if (persons.isEmpty() || knownFeatures.isEmpty())
     {
-        QMessageBox::warning(this, "提示", "请先注册至少一名人员。");
+        QMessageBox::warning(this, "提示", "请先在人员管理中新增至少一名人员。");
         return;
     }
 
@@ -557,7 +466,7 @@ void MainWindow::processCameraFrame()
         displayImageWithFaces(currentImage, currentFaces);
 
         resultTextEdit->setText(
-            QString("摄像头实时检测中。\n检测到 %1 张人脸。\n请先注册人员后再进行身份识别。")
+            QString("摄像头实时检测中。\n检测到 %1 张人脸。\n请先在人员管理中新增人员后再进行身份识别。")
                 .arg(currentFaces.size()));
 
         return;

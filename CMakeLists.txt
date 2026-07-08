@@ -26,6 +26,8 @@ add_executable(FaceRecognitionSystem
     src/config/AppConfig.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/PersonManagementDialog.h
+    src/ui/PersonManagementDialog.cpp
     src/ui/RegisterDialog.h
     src/ui/RegisterDialog.cpp
     src/vision/FaceDetector.h

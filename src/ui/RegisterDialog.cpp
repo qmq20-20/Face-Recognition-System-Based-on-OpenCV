@@ -8,22 +8,23 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
-RegisterDialog::RegisterDialog(QWidget *parent)
-    : QDialog(parent)
+RegisterDialog::RegisterDialog(QWidget *parent, bool imageRequired)
+    : QDialog(parent),
+      imageRequired(imageRequired)
 {
     setupUi();
 }
 
 void RegisterDialog::setupUi()
 {
-    setWindowTitle("注册人员");
+    setWindowTitle(imageRequired ? "新增人员" : "编辑人员");
     resize(460, 220);
 
     nameEdit = new QLineEdit(this);
     studentIdEdit = new QLineEdit(this);
     departmentEdit = new QLineEdit(this);
     imagePathEdit = new QLineEdit(this);
-    chooseImageButton = new QPushButton("选择图片", this);
+    chooseImageButton = new QPushButton(imageRequired ? "选择图片" : "选择新图片", this);
 
     imagePathEdit->setReadOnly(true);
 
@@ -35,7 +36,7 @@ void RegisterDialog::setupUi()
     formLayout->addRow("姓名：", nameEdit);
     formLayout->addRow("学号：", studentIdEdit);
     formLayout->addRow("部门：", departmentEdit);
-    formLayout->addRow("人脸图片：", imageLayout);
+    formLayout->addRow(imageRequired ? "人脸图片：" : "人脸图片（可选）：", imageLayout);
 
     QDialogButtonBox *buttonBox = new QDialogButtonBox(
         QDialogButtonBox::Ok | QDialogButtonBox::Cancel,
@@ -51,6 +52,15 @@ void RegisterDialog::setupUi()
             this, &RegisterDialog::accept);
     connect(buttonBox, &QDialogButtonBox::rejected,
             this, &RegisterDialog::reject);
+}
+
+void RegisterDialog::setPersonInfo(const QString &name,
+                                   const QString &studentId,
+                                   const QString &department)
+{
+    nameEdit->setText(name);
+    studentIdEdit->setText(studentId);
+    departmentEdit->setText(department);
 }
 
 QString RegisterDialog::name() const

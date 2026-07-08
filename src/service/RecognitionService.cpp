@@ -14,7 +14,7 @@ RecognitionResult RecognitionService::recognize(
 {
     RecognitionResult result;
     result.matched = false;
-    result.personId = -1;
+    result.studentId.clear();
     result.personName = "陌生人";
     result.similarity = 0.0;
 
@@ -24,7 +24,7 @@ RecognitionResult RecognitionService::recognize(
     }
 
     double bestSimilarity = -1.0;
-    int bestPersonId = -1;
+    QString bestStudentId;
 
     for (const FaceFeatureRecord &record : knownFeatures)
     {
@@ -33,7 +33,7 @@ RecognitionResult RecognitionService::recognize(
         if (similarity > bestSimilarity)
         {
             bestSimilarity = similarity;
-            bestPersonId = record.personId;
+            bestStudentId = record.studentId;
         }
     }
 
@@ -42,8 +42,8 @@ RecognitionResult RecognitionService::recognize(
     if (bestSimilarity >= similarityThreshold)
     {
         result.matched = true;
-        result.personId = bestPersonId;
-        result.personName = findPersonNameById(persons, bestPersonId);
+        result.studentId = bestStudentId;
+        result.personName = findPersonNameByStudentId(persons, bestStudentId);
     }
 
     return result;
@@ -86,11 +86,11 @@ double RecognitionService::cosineSimilarity(const std::vector<float> &a,
     return dot / (std::sqrt(normA) * std::sqrt(normB));
 }
 
-QString RecognitionService::findPersonNameById(const QList<Person> &persons, int personId) const
+QString RecognitionService::findPersonNameByStudentId(const QList<Person> &persons, const QString &studentId) const
 {
     for (const Person &person : persons)
     {
-        if (person.id == personId)
+        if (person.studentId == studentId)
         {
             return person.name;
         }

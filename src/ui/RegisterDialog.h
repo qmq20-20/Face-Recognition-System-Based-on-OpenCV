@@ -16,8 +16,11 @@ class RegisterDialog : public QDialog
     Q_OBJECT
 
 public:
-    explicit RegisterDialog(QWidget *parent = nullptr);
+    explicit RegisterDialog(QWidget *parent = nullptr, bool imageRequired = true);
 
+    void setPersonInfo(const QString &name,
+                       const QString &studentId,
+                       const QString &department);
     QString name() const;
     QString studentId() const;
     QString department() const;
@@ -35,6 +38,7 @@ private:
     QLineEdit *departmentEdit;
     QLineEdit *imagePathEdit;
     QPushButton *chooseImageButton;
+    bool imageRequired;
 };
 
 #endif

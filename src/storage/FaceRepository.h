@@ -14,7 +14,6 @@
 
 struct Person
 {
-    int id;
     QString name;
     QString studentId;
     QString department;
@@ -24,7 +23,7 @@ struct Person
 struct FaceFeatureRecord
 {
     int id;
-    int personId;
+    QString studentId;
     std::vector<float> feature;
     QString createdAt;
 };
@@ -47,13 +46,20 @@ public:
     bool open(const QString &databasePath);
     bool initializeTables();
 
-    int addPerson(const QString &name,
-                  const QString &studentId,
-                  const QString &department);
+    bool addPerson(const QString &name,
+                   const QString &studentId,
+                   const QString &department);
 
     QList<Person> getAllPersons() const;
+    QList<Person> searchPersons(const QString &keyword) const;
+    bool studentIdExists(const QString &studentId) const;
+    bool updatePerson(const QString &originalStudentId,
+                      const QString &name,
+                      const QString &studentId,
+                      const QString &department);
+    bool deletePerson(const QString &studentId);
 
-    bool addFaceFeature(int personId, const std::vector<float> &feature);
+    bool addFaceFeature(const QString &studentId, const std::vector<float> &feature);
     QList<FaceFeatureRecord> getAllFaceFeatures() const;
 
     bool addRecognitionLog(const QString &personName,
@@ -65,6 +71,11 @@ public:
     QString lastError() const;
 
 private:
+    bool tableExists(const QString &tableName) const;
+    bool tableHasColumn(const QString &tableName, const QString &columnName) const;
+    bool migrateLegacyPersonTables();
+    bool createCurrentTables();
+    Person readPerson(const QSqlQuery &query) const;
     QString featureToJson(const std::vector<float> &feature) const;
     std::vector<float> jsonToFeature(const QString &jsonText) const;
 

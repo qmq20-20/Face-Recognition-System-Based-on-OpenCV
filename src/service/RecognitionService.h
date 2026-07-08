@@ -14,7 +14,7 @@
 struct RecognitionResult
 {
     bool matched;
-    int personId;
+    QString studentId;
     QString personName;
     double similarity;
 };
@@ -36,7 +36,7 @@ private:
     double cosineSimilarity(const std::vector<float> &a,
                             const std::vector<float> &b) const;
 
-    QString findPersonNameById(const QList<Person> &persons, int personId) const;
+    QString findPersonNameByStudentId(const QList<Person> &persons, const QString &studentId) const;
 
 private:
     double similarityThreshold;
