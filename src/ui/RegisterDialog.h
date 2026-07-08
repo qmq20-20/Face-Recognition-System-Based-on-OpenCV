@@ -7,9 +7,16 @@
 
 #include <QDialog>
 #include <QString>
+#include <QStringList>
+#include <opencv2/core.hpp>
+#include <opencv2/videoio.hpp>
 
+class QLabel;
 class QLineEdit;
+class QListWidget;
 class QPushButton;
+class QTimer;
+class QCloseEvent;
 
 class RegisterDialog : public QDialog
 {
@@ -17,6 +24,7 @@ class RegisterDialog : public QDialog
 
 public:
     explicit RegisterDialog(QWidget *parent = nullptr, bool imageRequired = true);
+    ~RegisterDialog();
 
     void setPersonInfo(const QString &name,
                        const QString &studentId,
@@ -24,20 +32,39 @@ public:
     QString name() const;
     QString studentId() const;
     QString department() const;
-    QString imagePath() const;
+    QStringList imagePaths() const;
+
+protected:
+    void closeEvent(QCloseEvent *event) override;
 
 private slots:
-    void onChooseImageClicked();
+    void onImportImagesClicked();
+    void onRemoveSelectedImageClicked();
+    void onStartCameraClicked();
+    void onCapturePhotoClicked();
+    void onStopCameraClicked();
+    void updateCameraFrame();
 
 private:
     void setupUi();
+    void addImagePath(const QString &filePath);
+    void stopCamera();
+    void displayPreview(const cv::Mat &frame);
 
 private:
     QLineEdit *nameEdit;
     QLineEdit *studentIdEdit;
     QLineEdit *departmentEdit;
-    QLineEdit *imagePathEdit;
-    QPushButton *chooseImageButton;
+    QListWidget *imageListWidget;
+    QLabel *previewLabel;
+    QPushButton *importImagesButton;
+    QPushButton *removeImageButton;
+    QPushButton *startCameraButton;
+    QPushButton *capturePhotoButton;
+    QPushButton *stopCameraButton;
+    QTimer *cameraTimer;
+    cv::VideoCapture camera;
+    cv::Mat currentFrame;
     bool imageRequired;
 };
 

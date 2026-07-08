@@ -4,6 +4,7 @@
 #include "utils/ImageUtils.h"
 
 #include <QAbstractItemView>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -121,15 +122,13 @@ bool PersonManagementDialog::selectedPerson(Person *person) const
     return true;
 }
 
-bool PersonManagementDialog::extractFaceFeature(const QString &imagePath,
-                                                std::vector<float> *feature,
-                                                QString *errorMessage) const
+bool PersonManagementDialog::extractFaceFeatures(const QStringList &imagePaths,
+                                                 std::vector<std::vector<float>> *features,
+                                                 QString *errorMessage) const
 {
-    cv::Mat image = ImageUtils::readImageFromFile(imagePath);
-
-    if (image.empty())
+    if (imagePaths.isEmpty())
     {
-        *errorMessage = "图片读取失败，请选择有效的图片文件。";
+        *errorMessage = "请至少选择或拍摄一张人脸照片。";
         return false;
     }
 
@@ -139,31 +138,114 @@ bool PersonManagementDialog::extractFaceFeature(const QString &imagePath,
         return false;
     }
 
-    std::vector<cv::Rect> faces = faceDetector->detect(image);
+    features->clear();
 
-    if (faces.empty())
+    for (const QString &imagePath : imagePaths)
     {
-        *errorMessage = "图片中未检测到人脸。";
-        return false;
+        cv::Mat image = ImageUtils::readImageFromFile(imagePath);
+        QString imageName = QFileInfo(imagePath).fileName();
+
+        if (image.empty())
+        {
+            *errorMessage = QString("照片“%1”读取失败，请选择有效的图片文件。").arg(imageName);
+            return false;
+        }
+
+        std::vector<cv::Rect> faces = faceDetector->detect(image);
+
+        if (faces.empty())
+        {
+            *errorMessage = QString("照片“%1”中未检测到人脸。").arg(imageName);
+            return false;
+        }
+
+        cv::Rect largestFace = faces[0];
+
+        for (const cv::Rect &face : faces)
+        {
+            if (face.area() > largestFace.area())
+            {
+                largestFace = face;
+            }
+        }
+
+        cv::Mat faceImage = ImageUtils::cropFace(image, largestFace);
+        std::vector<float> feature = featureExtractor->extract(faceImage);
+
+        if (feature.empty())
+        {
+            *errorMessage = QString("照片“%1”的人脸特征提取失败。").arg(imageName);
+            return false;
+        }
+
+        features->push_back(feature);
     }
 
-    cv::Rect largestFace = faces[0];
+    return true;
+}
 
-    for (const cv::Rect &face : faces)
+std::vector<float> PersonManagementDialog::averageFeature(const std::vector<std::vector<float>> &features) const
+{
+    std::vector<float> average;
+
+    if (features.empty())
     {
-        if (face.area() > largestFace.area())
+        return average;
+    }
+
+    average.assign(features[0].size(), 0.0f);
+
+    for (const std::vector<float> &feature : features)
+    {
+        if (feature.size() != average.size())
         {
-            largestFace = face;
+            return std::vector<float>();
+        }
+
+        for (size_t i = 0; i < feature.size(); ++i)
+        {
+            average[i] += feature[i];
         }
     }
 
-    cv::Mat faceImage = ImageUtils::cropFace(image, largestFace);
-    *feature = featureExtractor->extract(faceImage);
+    float count = static_cast<float>(features.size());
 
-    if (feature->empty())
+    for (float &value : average)
     {
-        *errorMessage = "人脸特征提取失败。";
-        return false;
+        value /= count;
+    }
+
+    return average;
+}
+
+bool PersonManagementDialog::saveFaceFeatures(const QString &studentId,
+                                              const std::vector<std::vector<float>> &features,
+                                              QString *errorMessage) const
+{
+    for (const std::vector<float> &feature : features)
+    {
+        if (!repository->addFaceFeature(studentId, feature))
+        {
+            *errorMessage = "人脸特征保存失败：\n" + repository->lastError();
+            return false;
+        }
+    }
+
+    if (features.size() > 1)
+    {
+        std::vector<float> centerFeature = averageFeature(features);
+
+        if (centerFeature.empty())
+        {
+            *errorMessage = "中心特征计算失败。";
+            return false;
+        }
+
+        if (!repository->addFaceFeature(studentId, centerFeature))
+        {
+            *errorMessage = "中心特征保存失败：\n" + repository->lastError();
+            return false;
+        }
     }
 
     return true;
@@ -207,16 +289,16 @@ void PersonManagementDialog::onAddClicked()
         return;
     }
 
-    if (dialog.imagePath().isEmpty())
+    if (dialog.imagePaths().isEmpty())
     {
-        QMessageBox::warning(this, "新增失败", "请选择一张人脸图片。");
+        QMessageBox::warning(this, "新增失败", "请至少导入或拍摄一张人脸照片。");
         return;
     }
 
-    std::vector<float> feature;
+    std::vector<std::vector<float>> features;
     QString errorMessage;
 
-    if (!extractFaceFeature(dialog.imagePath(), &feature, &errorMessage))
+    if (!extractFaceFeatures(dialog.imagePaths(), &features, &errorMessage))
     {
         QMessageBox::warning(this, "新增失败", errorMessage);
         return;
@@ -228,15 +310,22 @@ void PersonManagementDialog::onAddClicked()
         return;
     }
 
-    if (!repository->addFaceFeature(dialog.studentId(), feature))
+    if (!saveFaceFeatures(dialog.studentId(), features, &errorMessage))
     {
         repository->deletePerson(dialog.studentId());
-        QMessageBox::warning(this, "新增失败", "人脸特征保存失败：\n" + repository->lastError());
+        QMessageBox::warning(this, "新增失败", errorMessage);
         return;
     }
 
     loadPersons(searchEdit->text());
-    QMessageBox::information(this, "新增成功", "人员信息已保存。");
+    QString message = QString("人员信息已保存。\n样本照片：%1 张").arg(features.size());
+
+    if (features.size() > 1)
+    {
+        message += "\n已额外保存平均中心特征。";
+    }
+
+    QMessageBox::information(this, "新增成功", message);
 }
 
 void PersonManagementDialog::onEditClicked()
@@ -281,21 +370,21 @@ void PersonManagementDialog::onEditClicked()
         return;
     }
 
-    if (!dialog.imagePath().isEmpty())
+    if (!dialog.imagePaths().isEmpty())
     {
-        std::vector<float> feature;
+        std::vector<std::vector<float>> features;
         QString errorMessage;
 
-        if (!extractFaceFeature(dialog.imagePath(), &feature, &errorMessage))
+        if (!extractFaceFeatures(dialog.imagePaths(), &features, &errorMessage))
         {
             QMessageBox::warning(this, "人脸更新失败", errorMessage);
             loadPersons(searchEdit->text());
             return;
         }
 
-        if (!repository->addFaceFeature(dialog.studentId(), feature))
+        if (!saveFaceFeatures(dialog.studentId(), features, &errorMessage))
         {
-            QMessageBox::warning(this, "人脸更新失败", "人脸特征保存失败：\n" + repository->lastError());
+            QMessageBox::warning(this, "人脸更新失败", errorMessage);
             loadPersons(searchEdit->text());
             return;
         }

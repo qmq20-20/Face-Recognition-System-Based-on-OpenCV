@@ -37,9 +37,13 @@ private:
     void setupUi();
     void loadPersons(const QString &keyword = QString());
     bool selectedPerson(Person *person) const;
-    bool extractFaceFeature(const QString &imagePath,
-                            std::vector<float> *feature,
-                            QString *errorMessage) const;
+    bool extractFaceFeatures(const QStringList &imagePaths,
+                             std::vector<std::vector<float>> *features,
+                             QString *errorMessage) const;
+    std::vector<float> averageFeature(const std::vector<std::vector<float>> &features) const;
+    bool saveFaceFeatures(const QString &studentId,
+                          const std::vector<std::vector<float>> &features,
+                          QString *errorMessage) const;
 
 private:
     FaceRepository *repository;
