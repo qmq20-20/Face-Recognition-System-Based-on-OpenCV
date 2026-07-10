@@ -18,6 +18,8 @@ compile_commands.json
 *.obj
 *.a
 *.lib
+*.pyc
+__pycache__/
 
 # Qt local files
 *.user
@@ -43,3 +45,15 @@ desktop.ini
 
 # Local AI/agent workspace
 .agents/
+
+# ML training data and outputs
+datasets/
+training/runs/
+training/cache/
+*.pt
+*.engine
+*.cache
+resources/models/*.onnx
+resources/models/*.pt
+
+docs/
