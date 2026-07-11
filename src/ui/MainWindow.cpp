@@ -22,13 +22,18 @@
 #include <QPen>
 #include <QCloseEvent>
 #include <QTimer>
+#include <QtConcurrent/QtConcurrentRun>
 #include <vector>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       recognitionService(AppConfig::defaultSimilarityThreshold()),
       cameraTimer(nullptr),
-      cameraFrameCount(0)
+      cameraFrameCount(0),
+      cameraRecognitionWatcher(nullptr),
+      cameraSessionId(0),
+      hasCameraRecognitionOutput(false),
+      cameraOutputHasKnownFeatures(false)
 {
     setupUi();
 }
@@ -118,11 +123,27 @@ void MainWindow::setupUi()
     connect(cameraTimer, &QTimer::timeout,
             this, &MainWindow::processCameraFrame);
 
-    QString modelPath = AppConfig::faceCascadeModelPath();
+    cameraRecognitionWatcher = new QFutureWatcher<CameraRecognitionResult>(this);
+    connect(cameraRecognitionWatcher, &QFutureWatcher<CameraRecognitionResult>::finished,
+            this, &MainWindow::onCameraRecognitionFinished);
 
-    if (!faceDetector.loadModel(modelPath))
+    const bool haarLoaded = faceDetector.loadModel(AppConfig::faceCascadeModelPath());
+    const bool yoloLoaded = faceDetector.loadYoloModel(AppConfig::yoloFaceDetectorModelPath());
+
+    if (!faceDetector.isLoaded())
     {
-        QMessageBox::warning(this, "模型加载失败", "无法加载人脸检测模型：\n" + modelPath);
+        QMessageBox::warning(
+            this,
+            "模型加载失败",
+            "无法加载 YOLO 或 Haar 人脸检测模型。\n\nYOLO：" +
+                AppConfig::yoloFaceDetectorModelPath() + "\nHaar：" +
+                AppConfig::faceCascadeModelPath());
+    }
+    else if (!yoloLoaded && haarLoaded)
+    {
+        resultTextEdit->setText(
+            "未找到或无法加载 YOLO ONNX 模型，当前使用 Haar Cascade 检测器。\n" +
+            AppConfig::yoloFaceDetectorModelPath() + "\n原因：" + faceDetector.yoloLoadError());
     }
     initializeDatabase();
 }
@@ -145,7 +166,15 @@ void MainWindow::initializeDatabase()
     refreshPersonTable();
     refreshLogView();
 
-    resultTextEdit->setText("数据库初始化成功：\n" + databasePath);
+    QString initializationText =
+        "数据库初始化成功：\n" + databasePath + "\n当前检测器：" + faceDetector.activeModelName();
+
+    if (faceDetector.activeModelName() == "Haar Cascade" && !faceDetector.yoloLoadError().isEmpty())
+    {
+        initializationText += "\nYOLO 加载失败原因：" + faceDetector.yoloLoadError();
+    }
+
+    resultTextEdit->setText(initializationText);
 }
 
 void MainWindow::refreshPersonTable()
@@ -404,6 +433,12 @@ void MainWindow::onStartCameraClicked()
         return;
     }
 
+    if (!faceDetector.isLoaded())
+    {
+        QMessageBox::warning(this, "摄像头无法启动", "未加载可用的人脸检测模型。");
+        return;
+    }
+
     if (!camera.open(0))
     {
         QMessageBox::warning(this, "摄像头打开失败", "无法打开默认摄像头，请检查摄像头是否存在或被其他程序占用。");
@@ -411,18 +446,38 @@ void MainWindow::onStartCameraClicked()
     }
 
     cameraFrameCount = 0;
+    ++cameraSessionId;
+    hasCameraRecognitionOutput = false;
+    cameraOutputHasKnownFeatures = false;
+    latestCameraRecognitionResults.clear();
     currentImagePath = "camera";
+    cameraPersons = repository.getAllPersons();
+    cameraKnownFeatures = repository.getAllFaceFeatures();
+    cameraFaceDetector = std::make_shared<FaceDetector>();
+    cameraFaceDetector->loadModel(AppConfig::faceCascadeModelPath());
+    cameraFaceDetector->loadYoloModel(AppConfig::yoloFaceDetectorModelPath());
 
     startCameraButton->setEnabled(false);
     stopCameraButton->setEnabled(true);
 
     cameraTimer->start();
 
-    resultTextEdit->setText("摄像头已启动，正在实时检测。");
+    QString cameraStatus = QString("摄像头已启动，正在后台连续检测。\n检测器：%1")
+                               .arg(cameraFaceDetector->activeModelName());
+
+    if (cameraFaceDetector->activeModelName() == "Haar Cascade" &&
+        !cameraFaceDetector->yoloLoadError().isEmpty())
+    {
+        cameraStatus += "\nYOLO 加载失败原因：\n" + cameraFaceDetector->yoloLoadError();
+    }
+
+    resultTextEdit->setText(cameraStatus);
 }
 
 void MainWindow::onStopCameraClicked()
 {
+    ++cameraSessionId;
+
     if (cameraTimer && cameraTimer->isActive())
     {
         cameraTimer->stop();
@@ -432,6 +487,14 @@ void MainWindow::onStopCameraClicked()
     {
         camera.release();
     }
+
+    // 正在执行的后台任务会持有自己的模型副本；停止后其结果会按会话编号直接丢弃。
+    cameraFaceDetector.reset();
+    cameraPersons.clear();
+    cameraKnownFeatures.clear();
+    latestCameraRecognitionResults.clear();
+    hasCameraRecognitionOutput = false;
+    cameraOutputHasKnownFeatures = false;
 
     startCameraButton->setEnabled(true);
     stopCameraButton->setEnabled(false);
@@ -456,61 +519,150 @@ void MainWindow::processCameraFrame()
     }
 
     currentImage = frame.clone();
-    currentFaces = faceDetector.detect(currentImage);
+    ++cameraFrameCount;
 
-    QList<Person> persons = repository.getAllPersons();
-    QList<FaceFeatureRecord> knownFeatures = repository.getAllFaceFeatures();
+    if (!cameraRecognitionWatcher->isRunning() && cameraFaceDetector)
+    {
+        const bool shouldWriteLog =
+            cameraFrameCount % AppConfig::cameraLogFrameInterval() == 0;
+        queueCameraRecognition(currentImage, shouldWriteLog);
+    }
 
-    if (persons.isEmpty() || knownFeatures.isEmpty())
+    // 始终在最新画面上绘制最近结果，避免旧帧和新帧交替显示造成闪烁。
+    if (!hasCameraRecognitionOutput)
+    {
+        displayImage(currentImage);
+    }
+    else if (cameraOutputHasKnownFeatures)
+    {
+        displayImageWithRecognitionResults(
+            currentImage,
+            currentFaces,
+            latestCameraRecognitionResults);
+    }
+    else
     {
         displayImageWithFaces(currentImage, currentFaces);
+    }
+}
 
-        resultTextEdit->setText(
-            QString("摄像头实时检测中。\n检测到 %1 张人脸。\n请先在人员管理中新增人员后再进行身份识别。")
-                .arg(currentFaces.size()));
+void MainWindow::queueCameraRecognition(const cv::Mat &frame, bool shouldWriteLog)
+{
+    const cv::Mat frameCopy = frame.clone();
+    const QList<Person> persons = cameraPersons;
+    const QList<FaceFeatureRecord> knownFeatures = cameraKnownFeatures;
+    const std::shared_ptr<FaceDetector> detector = cameraFaceDetector;
+    const double threshold = recognitionService.threshold();
+    const quint64 sessionId = cameraSessionId;
 
+    cameraRecognitionWatcher->setFuture(QtConcurrent::run(
+        [frameCopy, persons, knownFeatures, detector, threshold, shouldWriteLog, sessionId]() {
+            CameraRecognitionResult output;
+            output.frame = frameCopy;
+            output.cameraSessionId = sessionId;
+            output.shouldWriteLog = shouldWriteLog;
+            output.hasKnownFeatures = !persons.isEmpty() && !knownFeatures.isEmpty();
+
+            try
+            {
+                output.faces = detector->detect(frameCopy);
+                output.detectorName = detector->lastDetectionModelName();
+                output.detectorFallbackReason = detector->yoloInferenceError();
+            }
+            catch (const std::exception &error)
+            {
+                output.detectorName = "检测任务失败";
+                output.processingError = QString::fromStdString(error.what());
+                return output;
+            }
+
+            if (!output.hasKnownFeatures)
+            {
+                return output;
+            }
+
+            FeatureExtractor extractor;
+            RecognitionService service(threshold);
+
+            for (const cv::Rect &face : output.faces)
+            {
+                const cv::Mat faceImage = ImageUtils::cropFace(frameCopy, face);
+                const std::vector<float> feature = extractor.extract(faceImage);
+                output.recognitionResults.append(
+                    service.recognize(feature, persons, knownFeatures));
+            }
+
+            return output;
+        }));
+}
+
+void MainWindow::onCameraRecognitionFinished()
+{
+    const CameraRecognitionResult output = cameraRecognitionWatcher->result();
+
+    if (!camera.isOpened() || output.cameraSessionId != cameraSessionId)
+    {
         return;
     }
 
-    QList<RecognitionResult> results;
-    QString resultText;
+    currentFaces = output.faces;
+    latestCameraRecognitionResults = output.recognitionResults;
+    hasCameraRecognitionOutput = true;
+    cameraOutputHasKnownFeatures = output.hasKnownFeatures;
 
-    resultText += QString("摄像头实时识别中。\n检测到 %1 张人脸。\n\n")
-                      .arg(currentFaces.size());
-
-    ++cameraFrameCount;
-    bool shouldWriteLog = (cameraFrameCount % AppConfig::cameraLogFrameInterval() == 0);
-
-    for (int i = 0; i < static_cast<int>(currentFaces.size()); ++i)
+    if (!output.hasKnownFeatures)
     {
-        cv::Mat faceImage = ImageUtils::cropFace(currentImage, currentFaces[i]);
-        std::vector<float> feature = featureExtractor.extract(faceImage);
+        displayImageWithFaces(output.frame, output.faces);
+        QString resultText =
+            QString("摄像头实时检测中。\n检测器：%1\n检测到 %2 张人脸。\n请先在人员管理中新增人员后再进行身份识别。")
+                .arg(output.detectorName)
+                .arg(output.faces.size());
 
-        RecognitionResult result = recognitionService.recognize(
-            feature,
-            persons,
-            knownFeatures);
+        if (!output.detectorFallbackReason.isEmpty())
+        {
+            resultText += "\n\nYOLO 推理失败原因：\n" + output.detectorFallbackReason;
+        }
 
-        results.append(result);
+        if (!output.processingError.isEmpty())
+        {
+            resultText += "\n\n检测任务失败原因：\n" + output.processingError;
+        }
 
+        resultTextEdit->setText(resultText);
+        return;
+    }
+
+    QString resultText = QString("摄像头实时识别中。\n检测器：%1\n检测到 %2 张人脸。\n\n")
+                             .arg(output.detectorName)
+                             .arg(output.faces.size());
+
+    for (int i = 0; i < output.recognitionResults.size(); ++i)
+    {
+        const RecognitionResult &result = output.recognitionResults[i];
         resultText += QString("人脸 %1：%2，相似度：%3\n")
                           .arg(i + 1)
                           .arg(result.personName)
                           .arg(result.similarity, 0, 'f', 2);
 
-        if (shouldWriteLog)
+        if (output.shouldWriteLog)
         {
-            repository.addRecognitionLog(
-                result.personName,
-                result.similarity,
-                "camera");
+            repository.addRecognitionLog(result.personName, result.similarity, "camera");
         }
     }
 
-    displayImageWithRecognitionResults(currentImage, currentFaces, results);
+    if (!output.detectorFallbackReason.isEmpty())
+    {
+        resultText += "\nYOLO 推理失败原因：\n" + output.detectorFallbackReason;
+    }
+
+    if (!output.processingError.isEmpty())
+    {
+        resultText += "\n检测任务失败原因：\n" + output.processingError;
+    }
+
     resultTextEdit->setText(resultText);
 
-    if (shouldWriteLog)
+    if (output.shouldWriteLog)
     {
         refreshLogView();
     }

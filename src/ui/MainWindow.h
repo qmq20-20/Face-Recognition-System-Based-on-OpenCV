@@ -6,12 +6,15 @@
 // 负责声明界面控件、按钮槽函数，以及图片导入、显示等界面相关功能。
 
 #include <QMainWindow>
+#include <QFutureWatcher>
 #include <QString>
+#include "service/CameraRecognitionResult.h"
 #include "service/RecognitionService.h"
 #include "storage/FaceRepository.h"
 #include "vision/FaceDetector.h"
 #include "vision/FeatureExtractor.h"
 #include <vector>
+#include <memory>
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
 
@@ -41,6 +44,7 @@ private slots:
     void onStopCameraClicked();
     // 定时读取摄像头画面并进行实时识别。
     void processCameraFrame();
+    void onCameraRecognitionFinished();
 
 private:
     void setupUi();
@@ -81,6 +85,8 @@ private:
         const std::vector<cv::Rect> &faces,
         const QList<RecognitionResult> &results);
 
+    void queueCameraRecognition(const cv::Mat &frame, bool shouldWriteLog);
+
     // 摄像头定时器，每隔一小段时间读取一帧画面。
     QTimer *cameraTimer;
 
@@ -89,6 +95,16 @@ private:
 
     // 摄像头帧计数，用于控制日志写入频率。
     int cameraFrameCount;
+
+    // 摄像头识别在后台执行，避免 ONNX 推理阻塞界面刷新。
+    QFutureWatcher<CameraRecognitionResult> *cameraRecognitionWatcher;
+    std::shared_ptr<FaceDetector> cameraFaceDetector;
+    QList<Person> cameraPersons;
+    QList<FaceFeatureRecord> cameraKnownFeatures;
+    quint64 cameraSessionId;
+    QList<RecognitionResult> latestCameraRecognitionResults;
+    bool hasCameraRecognitionOutput;
+    bool cameraOutputHasKnownFeatures;
 
 private:
     QLabel *imageLabel;
