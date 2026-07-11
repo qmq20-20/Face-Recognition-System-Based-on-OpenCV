@@ -92,11 +92,11 @@ SCU 2025 级计算机科学与技术实训项目
 
 > 当前运行版本依赖 OpenCV `5.0.0` 的 DNN 模块执行 YOLO11 ONNX。OpenCV 5 已移除旧版 Haar `CascadeClassifier` API，因此模型加载或推理失败时，程序会直接显示原因。
 
-本项目内已构建 OpenCV 5 时，`OpenCV_DIR` 为 `opencv5-deps/install/x64/mingw/lib`。`CMakePresets.json` 固定了该路径、Qt 路径、GCC 15 编译器和构建目录。构建时 CMake 会部署 Qt、OpenCV 与 MinGW 运行库到可执行文件目录。
+本项目内已构建 OpenCV 5 时，`OpenCV_DIR` 为 `opencv5-deps/install/x64/mingw/lib`。`CMakePresets.json` 固定了该路径、Qt 路径、GCC 15 编译器和 `build` 构建目录。构建时 CMake 会部署 Qt、OpenCV 与 MinGW 运行库到可执行文件目录。
 
 ## 构建与运行
 
-推荐在 VS Code 安装 CMake Tools 扩展后，按 `Ctrl+Shift+P`，依次执行“CMake: Select Configure Preset”和“CMake: Select Build Preset”，两次均选择 `OpenCV 5 + MinGW`。随后执行“CMake: Build”和“CMake: Launch”，插件会自动使用 `build-opencv5` 目录。
+推荐在 VS Code 安装 CMake Tools 扩展后，按 `Ctrl+Shift+P`，依次执行“CMake: Select Configure Preset”和“CMake: Select Build Preset”，两次均选择 `OpenCV 5 + MinGW`。随后执行“CMake: Build”和“CMake: Launch”，插件会自动使用 `build` 目录。
 
 也可以在项目根目录执行：
 
@@ -108,7 +108,7 @@ cmake --build --preset opencv5-mingw
 构建完成后运行：
 
 ```powershell
-.\build-opencv5\FaceRecognitionSystem.exe
+    .\build\FaceRecognitionSystem.exe
 ```
 
 构建后，CMake 会自动把 `resources` 目录复制到可执行文件所在目录。程序加载以下 YOLO 模型：
@@ -153,7 +153,6 @@ cmake --build --preset opencv5-mingw
 resources/models/face_detector_yolo.onnx
 ```
 
-该文件被 `.gitignore` 忽略，不会自动上传 GitHub。答辩或发布程序时，需要随可执行程序一并提供该模型文件。
 
 ### 特征提取
 
@@ -179,17 +178,6 @@ resources/models/face_detector_yolo.onnx
 - `recognition_logs`：识别日志，包括识别时间、人员姓名、相似度和图片来源。
 
 删除人员时，SQLite 外键会级联删除其对应的人脸特征；识别日志保留历史姓名文本，不随人员删除而清空。
-
-## 已完成的结构优化
-
-- 按职责拆分源码目录，形成 `ui`、`vision`、`service`、`storage`、`config`、`utils` 等模块。
-- 新增 `AppConfig`，集中管理模型路径、数据库路径、识别阈值和摄像头相关参数。
-- 新增 `ImageUtils`，从 `MainWindow` 中拆出图片读取、图片格式转换和人脸裁剪逻辑。
-- 新增 `PersonManagementDialog`，将原来的直接注册按钮升级为人员信息管理入口。
-- 扩展 `RegisterDialog`，支持多张本地照片导入、摄像头预览和连续拍照。
-- 扩展 `FaceRepository`，支持人员查询、更新和删除，并以学号作为人员唯一标识。
-- 清理 CMake 配置，去掉重复的 Qt 查找语句，并支持通过 CMake 参数覆盖 Qt/OpenCV 路径。
-- `MainWindow` 更聚焦于界面交互、摄像头控制和结果展示，底层工具逻辑由独立模块承担。
 
 ## 验证建议
 
