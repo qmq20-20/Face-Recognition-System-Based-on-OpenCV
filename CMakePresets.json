@@ -1,0 +1,23 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "opencv5-mingw",
+      "displayName": "OpenCV 5 + MinGW",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build-opencv5",
+      "cacheVariables": {
+        "CMAKE_PREFIX_PATH": "D:/QT/5.14.2/mingw73_64",
+        "OpenCV_DIR": "${sourceDir}/opencv5-deps/install/x64/mingw/lib",
+        "CMAKE_CXX_COMPILER": "D:/vscode/mingw64/bin/g++.exe",
+        "BUILD_YOLO_MODEL_PROBE": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "opencv5-mingw",
+      "configurePreset": "opencv5-mingw"
+    }
+  ]
+}
