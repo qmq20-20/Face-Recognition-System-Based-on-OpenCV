@@ -2,8 +2,6 @@ cmake_minimum_required(VERSION 3.16)
 
 project(FaceRecognitionSystem LANGUAGES CXX)
 
-option(BUILD_YOLO_MODEL_PROBE "Build the local YOLO ONNX compatibility probe" OFF)
-
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -115,28 +113,3 @@ target_link_libraries(FaceRecognitionSystem
     Qt5::Concurrent
     ${OpenCV_LIBS}
 )
-
-if(BUILD_YOLO_MODEL_PROBE)
-    add_executable(YoloModelProbe
-        tools/YoloModelProbe.cpp
-        src/config/AppConfig.h
-        src/config/AppConfig.cpp
-        src/vision/FaceDetection.h
-        src/vision/FaceDetector.h
-        src/vision/FaceDetector.cpp
-    )
-
-    target_include_directories(YoloModelProbe
-        PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
-    )
-
-    target_link_libraries(YoloModelProbe
-        PRIVATE
-        Qt5::Core
-        ${OpenCV_LIBS}
-    )
-
-    copy_opencv_runtime(YoloModelProbe)
-    copy_mingw_runtime(YoloModelProbe)
-endif()

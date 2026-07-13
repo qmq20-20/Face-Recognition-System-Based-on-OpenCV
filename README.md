@@ -60,8 +60,6 @@ SCU 2025 级计算机科学与技术实训项目
     │   └── RecognitionService.h / RecognitionService.cpp
     └── storage
         └── FaceRepository.h / FaceRepository.cpp
-├── tools
-│   └── YoloModelProbe.cpp
 └── training
     ├── configs
     ├── scripts
