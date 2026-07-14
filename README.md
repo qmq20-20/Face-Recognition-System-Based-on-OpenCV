@@ -40,7 +40,7 @@ SCU 2025 级计算机科学与技术实训项目
 ├── resources
 │   ├── haarcascade_frontalface_default.xml
 │   └── models
-│       └── face_detector_yolo.onnx (本地部署模型，不提交至 Git)
+│       └── face_detector_yolo.onnx 
 ├── src
     ├── main.cpp
     ├── config

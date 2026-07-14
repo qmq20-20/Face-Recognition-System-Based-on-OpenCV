@@ -53,11 +53,9 @@ datasets/
 training/runs/
 training/cache/
 .venv-training/
-opencv5-deps/
 *.pt
 *.engine
 *.cache
-resources/models/*.onnx
 resources/models/*.pt
 
 docs/
