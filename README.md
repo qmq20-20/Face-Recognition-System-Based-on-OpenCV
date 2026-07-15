@@ -1,6 +1,6 @@
-# Face-Recognition-System-Based-on-OpenCV
+# SCU 2025 级计算机科学与技术实训项目
 
-SCU 2025 级计算机科学与技术实训项目
+Face-Recognition-System-Based-on-OpenCV 
 
 ## 项目简介
 
